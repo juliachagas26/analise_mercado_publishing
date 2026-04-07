@@ -50,8 +50,8 @@ if not df_final.empty:
         markers=True, # Adiciona os pontos nas linhas como no print
         title="Evolução Mensal de Usuários Únicos por Categoria (Comscore)",
         labels={
-            "Total_Real": "Visitantes Únicos",
-            "Date": "Período",
+            "Total_Real": "Usuários Únicos",
+            "Date": "Mês",
             "Categoria": "Nicho"
         },
         template="plotly_white" # Deixa o fundo limpo
@@ -91,7 +91,7 @@ try:
     df_var = calcular_variacoes(df_final, data_ref)
     
     # 5. Renomear coluna com o mês escolhido
-    nome_coluna_audiencia = f"Audiência Total ({mes_selecionado_str})"
+    nome_coluna_audiencia = f"Usuários únicos ({mes_selecionado_str})"
     df_var = df_var.rename(columns={'Audiência Total': nome_coluna_audiencia})
 
     def color_variacao(val):
@@ -169,13 +169,29 @@ try:
 
         st.plotly_chart(fig_hhi, use_container_width=True)
 
-        # 5. Texto de apoio para a banca do TCC
+        # Texto explicativo sobre a métrica utilizada
         with st.expander("O que esses valores significam?"):
-            st.write("""
-            O **HHI** varia de 0 a 10.000:
-            - **Abaixo de 1000:** Mercado desconcentrado.
-            - **1000 a 1800:** Mercado moderadamente concentrado.
-            - **Acima de 1800:** Mercado altamente concentrado.
+            st.markdown("""
+            O **Índice Herfindahl-Hirschman (HHI)** é utilizado em análises antitruste para medir o grau de concentração em um mercado relevante.
+            
+            ### Como é calculado?
+            O HHI é calculado com base no **somatório do quadrado das participações de mercado** ($s_i^2$) de todas as empresas de um dado mercado:
+            """)
+            
+            st.latex(r"HHI = \sum_{i=1}^{n} s_i^2")
+            
+            st.markdown("""
+            O índice pode chegar até **10.000 pontos**, valor que representa um **monopólio** (uma única empresa com 100% do mercado).
+
+            ---
+            
+            ### Classificação do Mercado:
+            * **Abaixo de 1000:** Mercado desconcentrado.
+            * **1000 a 1800:** Mercado moderadamente concentrado.
+            * **Acima de 1800:** Mercado altamente concentrado.
+            
+            ---
+            **Fonte:** [CADE - Guia de Termos](https://vcde.cade.gov.br/cadethes/pt-BR/page/indiceherfindahlhirschman?clang=pt-br)
             """)
             
 except Exception as e:
@@ -365,8 +381,6 @@ if not df_area.empty:
     Conta de market share considerando o total de visitas
     """)
 
-st.divider()
-st.markdown(f"#### 🎯 Matriz de Alcance vs. Engajamento Mensal ({categoria_selecionada.capitalize()})")
 
 # 1. Carregar todos os dados da categoria (já processados com escalas no utils)
 df_disp_full = carregar_dados_dispersao(categoria_selecionada)
@@ -400,10 +414,10 @@ if not df_disp_full.empty:
         color='Media',
         hover_name='Media',
         text='Media', # Exibe o nome do veículo ao lado do ponto
-        title=f"Posicionamento de Mercado: {mes_selecionado_str}",
+        title=f"Usuários por visitas - {mes_selecionado_str}",
         labels={
-            'Usuarios_Scatter': 'Usuários Únicos (Escala: Milhões)',
-            'Visitas_Scatter': 'Total de Visitas (Escala: Milhares)'
+            'Usuarios_Scatter': 'Usuários Únicos',
+            'Visitas_Scatter': 'Total de Visitas'
         },
         template="plotly_white"
     )
