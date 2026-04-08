@@ -6,7 +6,7 @@ from utils import (
     carregar_dados_consolidadores, 
     calcular_variacoes, 
     calcular_hhi_temporal, 
-    carregar_detalhes_categoria, 
+    carregar_categoria_completa, 
     calcular_variacoes_veiculos, 
     calcular_share_grupos,
     contar_players_ativos,
@@ -220,7 +220,7 @@ with col1:
 )
 
 # 2. Carregar dados específicos (sem o totalizador)
-df_cat = carregar_detalhes_categoria(categoria_selecionada)
+df_cat = carregar_categoria_completa(categoria_selecionada)
 
 if not df_cat.empty:
     # 3. Gráfico de Linha para os veículos daquela categoria
