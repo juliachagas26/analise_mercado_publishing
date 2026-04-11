@@ -1,0 +1,123 @@
+# MarketScope — Digital Audience Intelligence
+
+Dashboard analítico desenvolvido para explorar a dinâmica de audiência no mercado de publishing digital, com foco em concentração, competitividade, liderança, dispersão e projeção de audiência por categoria e player.
+
+O projeto foi construído Trabalho de Conclusão de Curso voltado à análise do ecossistema de mídia digital, usando dados da Comscore, plataforma global de medição de audiência. 
+
+---
+
+## Objetivo
+
+O **MarketScope** busca apoiar a leitura estratégica de dados de audiência digital, especificamente do mercado de publishing, permitindo responder perguntas como:
+
+- Quais categorias crescem ou retraem ao longo do tempo?
+- O mercado está mais concentrado ou mais fragmentado?
+- O market share está se consolidando nos líderes ou se distribuindo entre mais players?
+- Quantos veículos ativos existem em cada nicho?
+- Como se comportam os principais players de cada categoria?
+- É possível estimar cenários futuros de audiência com base em tendência e sazonalidade?
+
+
+---
+
+## Funcionalidades
+
+O dashboard está organizado em seções analíticas:
+
+### 1. Visão geral por categoria
+Apresenta a evolução mensal de usuários únicos por categoria:
+- News
+- Entertainment
+- Sports
+- Food
+
+Também mostra:
+- variação **MoM** (month-over-month)
+- variação **YoY** (year-over-year)
+
+### 2. HHI
+Calcula o **Índice Herfindahl-Hirschman (HHI)** para avaliar o grau de concentração de mercado em cada categoria.
+
+### 3. Análise por categoria
+Exibe a evolução dos principais veículos de cada nicho e suas variações mensais e anuais.
+
+### 4. Share dos grupos
+Agrupa os players em blocos estratégicos:
+- Top players
+- Próximos players
+- Restante do mercado
+
+Permite observar concentração vs. dispersão de share ao longo do tempo.
+
+### 5. Share dos líderes
+Mostra a evolução do market share dos principais players individuais de cada categoria.
+
+### 6. Dispersão
+Matriz de posicionamento dos veículos com base em:
+- usuários únicos
+- visitas totais
+
+Ajuda a comparar alcance e engajamento.
+
+### 7. Predição de audiência
+Modelo de regressão linear com variáveis exógenas específicas por categoria, para gerar:
+- série histórica
+- ajuste do modelo
+- cenário previsto
+
+Também exibe:
+- métricas do modelo
+- coeficientes estimados
+
+---
+
+## Metodologia
+
+### Fonte de dados
+- **Comscore — MyMetrix**
+
+### Categorias analisadas
+- `news`
+- `entretenimento`
+- `sports`
+- `food`
+
+### Principais métricas utilizadas
+- Usuários únicos
+- Visitas
+- Views
+- HHI
+- Quantidade de players ativos
+
+### Predição
+A modelagem preditiva foi feita com **regressão linear com variáveis exógenas**, com especificações diferentes por categoria:
+
+- **News**  
+  Tendência temporal + dummies mensais + eleições municipais e nacionais
+
+- **Entertainment**  
+  Tendência temporal + efeito BBB
+
+- **Sports**  
+  Tendência temporal + dummies mensais + Olimpíadas + Copa do Mundo FIFA
+
+- **Food**  
+  Tendência temporal + sazonalidade mensal
+
+A previsão deve ser interpretada como **cenário-base**, útil para capturar tendência e sazonalidade/eventos, e não como projeção causal definitiva.
+
+---
+
+## Estrutura do projeto
+
+```bash
+.
+├── app.py
+├── utils.py
+├── data/
+│   ├── news.xlsx
+│   ├── entretenimento.xlsx
+│   ├── sports.xlsx
+│   └── food.xlsx
+├── requirements.txt
+└── README.md
