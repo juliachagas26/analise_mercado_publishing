@@ -1,8 +1,9 @@
 import os
 from datetime import datetime
-
 import pandas as pd
 import streamlit as st
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 
 # =========================================================
@@ -429,3 +430,344 @@ def carregar_dados_dispersao(nome_categoria: str) -> pd.DataFrame:
     df['Visitas_Scatter'] = pd.to_numeric(df['Visits_Real'], errors='coerce')
 
     return df.dropna(subset=['Date', 'Media', 'Usuarios_Scatter', 'Visitas_Scatter']).reset_index(drop=True)
+
+
+# =========================================================
+# PREDIÇÃO
+# =========================================================
+
+@st.cache_data
+def listar_midias_categoria(nome_categoria: str) -> list[str]:
+    df = carregar_categoria_completa(nome_categoria)
+
+    if df.empty:
+        return []
+
+    return sorted(df['Media'].dropna().unique().tolist())
+
+
+@st.cache_data
+def carregar_serie_player(nome_categoria: str, media: str) -> pd.DataFrame:
+    df = carregar_categoria_completa(nome_categoria)
+
+    if df.empty:
+        return pd.DataFrame()
+
+    df_player = df[df['Media'] == media].copy()
+    df_player = df_player.sort_values('Date').reset_index(drop=True)
+
+    return df_player[['Date', 'Media', 'Total_Real']]
+
+
+@st.cache_data
+def prever_audiencia_regressao_linear(
+    nome_categoria: str,
+    media: str,
+    meses_futuros: int = 6
+) -> pd.DataFrame:
+    """
+    Gera previsão por regressão linear simples usando o tempo
+    como variável explicativa.
+
+    Retorna um dataframe com:
+    - Date
+    - Media
+    - Total_Real
+    - tipo ("Histórico" ou "Previsto")
+    """
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 3:
+        return pd.DataFrame()
+
+    df_player = df_player.copy().sort_values('Date').reset_index(drop=True)
+
+    # Índice temporal simples: 0, 1, 2, ...
+    df_player['t'] = np.arange(len(df_player))
+
+    X = df_player[['t']]
+    y = df_player['Total_Real']
+
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+
+    # histórico ajustado não será mostrado como fitted, só usamos a previsão futura
+    ultimo_t = df_player['t'].max()
+    ultima_data = df_player['Date'].max()
+
+    datas_futuras = pd.date_range(
+        start=ultima_data + pd.offsets.MonthBegin(1),
+        periods=meses_futuros,
+        freq='MS'
+    )
+
+    t_futuro = np.arange(ultimo_t + 1, ultimo_t + 1 + meses_futuros).reshape(-1, 1)
+    y_prev = modelo.predict(t_futuro)
+
+    # evita previsão negativa
+    y_prev = np.maximum(y_prev, 0)
+
+    df_hist = df_player[['Date', 'Media', 'Total_Real']].copy()
+    df_hist['tipo'] = 'Histórico'
+
+    df_prev = pd.DataFrame({
+        'Date': datas_futuras,
+        'Media': media,
+        'Total_Real': y_prev,
+        'tipo': 'Previsto'
+    })
+
+    return pd.concat([df_hist, df_prev], ignore_index=True)
+
+@st.cache_data
+def adicionar_exogenas_categoria(df: pd.DataFrame, categoria: str) -> pd.DataFrame:
+    """
+    Adiciona variáveis exógenas por categoria.
+
+    Regras:
+    - news: tendência + dummies mensais + eleição municipal/nacional
+    - entretenimento: tendência + BBB
+    - food: tendência + dummies mensais
+    - sports: tendência + dummies mensais + olimpíadas + copa
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date").reset_index(drop=True)
+
+    categoria = str(categoria).lower().strip()
+
+    df["ano"] = df["Date"].dt.year
+    df["mes"] = df["Date"].dt.month
+
+    # inicializa todas as colunas possíveis
+    for i in range(1, 13):
+        df[f"mes_{i}"] = 0
+
+    df["eleicao_municipal"] = 0
+    df["eleicao_nacional"] = 0
+    df["bbb"] = 0
+    df["olimpiadas"] = 0
+    df["copa_fifa"] = 0
+
+    # categorias que usam sazonalidade mensal no modelo
+    if categoria in ["news", "sports", "food"] or categoria not in ["entretenimento"]:
+        for i in range(1, 13):
+            df.loc[df["mes"] == i, f"mes_{i}"] = 1
+
+    if categoria == "news":
+        anos_eleicao_nacional = {2018, 2022, 2026, 2030}
+        anos_eleicao_municipal = {2016, 2020, 2024, 2028}
+
+        df.loc[
+            (df["ano"].isin(anos_eleicao_nacional)) & (df["mes"] == 10),
+            "eleicao_nacional"
+        ] = 1
+
+        df.loc[
+            (df["ano"].isin(anos_eleicao_municipal)) & (df["mes"] == 10),
+            "eleicao_municipal"
+        ] = 1
+
+    elif categoria == "entretenimento":
+        df.loc[df["mes"].isin([1, 2, 3, 4]), "bbb"] = 1
+
+
+    elif categoria == "sports":
+        anos_olimpiadas = {2016, 2021, 2024, 2028, 2032}
+        anos_copa = {2018, 2022, 2026, 2030}
+
+        df.loc[
+            (df["ano"].isin(anos_olimpiadas)) & (df["mes"].isin([7, 8])),
+            "olimpiadas"
+        ] = 1
+
+        df.loc[
+            (df["ano"].isin(anos_copa)) & (df["mes"].isin([6, 7])),
+            "copa_fifa"
+        ] = 1
+
+    return df
+
+def obter_colunas_exogenas_por_categoria(categoria: str) -> list[str]:
+    categoria = str(categoria).lower().strip()
+
+    colunas_meses = [f"mes_{i}" for i in range(1, 12)]
+
+    if categoria == "news":
+        return colunas_meses + [
+            "eleicao_municipal",
+            "eleicao_nacional",
+        ]
+
+    elif categoria == "entretenimento":
+        return ["bbb"]
+
+    elif categoria == "food":
+        return colunas_meses
+
+    elif categoria == "sports":
+        return colunas_meses + ["olimpiadas", "copa_fifa"]
+
+    return colunas_meses
+
+
+@st.cache_data
+def prever_audiencia_regressao_exogenas(
+    nome_categoria: str,
+    media: str,
+    meses_futuros: int = 6
+) -> pd.DataFrame:
+    """
+    Previsão de audiência com regressão linear + exógenas.
+
+    Usa:
+    - tendência temporal (t)
+    - dummies de mês
+    - eventos exógenos da categoria
+
+    Retorna um DataFrame com:
+    - Date
+    - Media
+    - Total_Real
+    - tipo: Histórico / Ajustado / Previsto
+    """
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 6:
+        return pd.DataFrame()
+
+    df_player = df_player.copy().sort_values("Date").reset_index(drop=True)
+
+    # histórico + exógenas
+    df_hist = adicionar_exogenas_categoria(df_player, nome_categoria)
+    df_hist["t"] = np.arange(len(df_hist))
+
+    col_exog = obter_colunas_exogenas_por_categoria(nome_categoria)
+
+    for col in col_exog:
+        if col not in df_hist.columns:
+            df_hist[col] = 0
+
+    X_hist = df_hist[["t"] + col_exog]
+    y_hist = df_hist["Total_Real"]
+
+    modelo = LinearRegression()
+    modelo.fit(X_hist, y_hist)
+
+    # série histórica real
+    df_hist_plot = df_hist[["Date", "Media", "Total_Real"]].copy()
+    df_hist_plot["tipo"] = "Histórico"
+
+    # série ajustada no histórico
+    df_fit_plot = df_hist[["Date", "Media"]].copy()
+    df_fit_plot["Total_Real"] = modelo.predict(X_hist)
+    df_fit_plot["Total_Real"] = np.maximum(df_fit_plot["Total_Real"], 0)
+    df_fit_plot["tipo"] = "Ajustado"
+
+    # futuro
+    ultima_data = df_hist["Date"].max()
+    datas_futuras = pd.date_range(
+        start=ultima_data + pd.offsets.MonthBegin(1),
+        periods=meses_futuros,
+        freq="MS"
+    )
+
+    df_fut = pd.DataFrame({
+        "Date": datas_futuras,
+        "Media": media
+    })
+
+    df_fut = adicionar_exogenas_categoria(df_fut, nome_categoria)
+    df_fut["t"] = np.arange(len(df_hist), len(df_hist) + len(df_fut))
+
+    for col in col_exog:
+        if col not in df_fut.columns:
+            df_fut[col] = 0
+
+    X_fut = df_fut[["t"] + col_exog]
+    y_fut = modelo.predict(X_fut)
+    y_fut = np.maximum(y_fut, 0)
+
+    df_prev_plot = df_fut[["Date", "Media"]].copy()
+    df_prev_plot["Total_Real"] = y_fut
+    df_prev_plot["tipo"] = "Previsto"
+
+    df_saida = pd.concat(
+        [df_hist_plot, df_fit_plot, df_prev_plot],
+        ignore_index=True
+    )
+
+    return df_saida
+
+
+@st.cache_data
+def resumir_modelo_regressao_exogenas(nome_categoria: str, media: str) -> pd.DataFrame:
+    """
+    Retorna os coeficientes da regressão linear com exógenas.
+    """
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 6:
+        return pd.DataFrame()
+
+    df = adicionar_exogenas_categoria(df_player, nome_categoria)
+    df["t"] = np.arange(len(df))
+
+    col_exog = obter_colunas_exogenas_por_categoria(nome_categoria)
+
+    for col in col_exog:
+        if col not in df.columns:
+            df[col] = 0
+
+    X = df[["t"] + col_exog]
+    y = df["Total_Real"]
+
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+
+    coef_df = pd.DataFrame({
+        "Variável": ["Intercepto"] + list(X.columns),
+        "Coeficiente": [modelo.intercept_] + list(modelo.coef_)
+    })
+
+    return coef_df
+
+@st.cache_data
+def avaliar_modelo_regressao_exogenas(nome_categoria: str, media: str) -> pd.DataFrame:
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 6:
+        return pd.DataFrame()
+
+    df = adicionar_exogenas_categoria(df_player, nome_categoria)
+    df["t"] = np.arange(len(df))
+
+    col_exog = obter_colunas_exogenas_por_categoria(nome_categoria)
+
+    for col in col_exog:
+        if col not in df.columns:
+            df[col] = 0
+
+    X = df[["t"] + col_exog]
+    y = df["Total_Real"]
+
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+
+    y_pred = modelo.predict(X)
+    y_pred = np.maximum(y_pred, 0)
+
+    mae = np.mean(np.abs(y - y_pred))
+
+    y_safe = np.where(y == 0, np.nan, y)
+    mape = np.nanmean(np.abs((y - y_pred) / y_safe)) * 100
+
+    r2 = modelo.score(X, y)
+
+    return pd.DataFrame({
+        "Métrica": ["R²", "MAE", "MAPE (%)", "N observações"],
+        "Valor": [r2, mae, mape, len(df)]
+    })

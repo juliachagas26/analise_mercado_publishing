@@ -12,6 +12,11 @@ from utils import (
     contar_players_ativos,
     calcular_area_share_top_players,
     carregar_dados_dispersao,
+    listar_midias_categoria,
+    carregar_serie_player,
+    prever_audiencia_regressao_exogenas,
+    resumir_modelo_regressao_exogenas,
+    avaliar_modelo_regressao_exogenas,
     GROUP_SIZES
 )
 
@@ -51,13 +56,65 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Análise de Audiência Publishing Digital")
 
 # =========================================================
 # SIDEBAR - NAVEGAÇÃO
 # =========================================================
 
-st.sidebar.markdown("### Navegação")
+st.sidebar.markdown(
+    """
+    <style>
+    .logo-wrap {
+        text-align: center;
+        padding: 2px 6px 34px 6px;
+        margin-bottom: 18px;
+    }
+
+    .logo-title {
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 0.95;
+        letter-spacing: -1px;
+        font-family: Roboto, Open Sans, sans-serif;
+    }
+
+    .logo-market {
+        color: #49aee9;   /* azul claro */
+    }
+
+    .logo-scope {
+        color: #0b3f78;   /* azul escuro */
+    }
+
+    .logo-subtitle {
+        margin-top: 8px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        color: #7f9caf;
+        font-family: Roboto, Open Sans, sans-serif;
+        text-transform: uppercase;
+        line-height: 1.25;
+    }
+
+    section[data-testid="stSidebar"] .categoria-wrap {
+    margin-top: -14px;
+    padding-top: 0;
+    }
+
+    </style>
+
+    <div class="logo-wrap">
+        <div class="logo-title">
+            <span class="logo-market">Market</span><span class="logo-scope">Scope</span>
+        </div>
+        <div class="logo-subtitle">
+            Digital Audience Intelligence
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 secao = st.sidebar.radio(
     "",
@@ -66,9 +123,9 @@ secao = st.sidebar.radio(
         "HHI",
         "Análise por categoria",
         "Share dos grupos",
-        "Players ativos",
         "Share dos líderes",
         "Dispersão",
+        "Predição de audiência",
     ],
     label_visibility="collapsed"
 )
@@ -77,11 +134,12 @@ categoria_selecionada = None
 if secao in [
     "Análise por categoria",
     "Share dos grupos",
-    "Players ativos",
     "Share dos líderes",
     "Dispersão",
+    "Predição de audiência",
 ]:
-    st.sidebar.divider()
+
+    st.sidebar.markdown('<div class="categoria-wrap">', unsafe_allow_html=True)
     categoria_selecionada = st.sidebar.selectbox(
         "Categoria",
         ["news", "entretenimento", "sports", "food"],
@@ -217,12 +275,31 @@ elif secao == "HHI":
 
         st.plotly_chart(fig_hhi, use_container_width=True)
 
+        # Texto explicativo sobre a métrica utilizada
         with st.expander("O que esses valores significam?"):
-            st.write("""
-            O **HHI** varia de 0 a 10.000:
-            - **Abaixo de 1000:** Mercado desconcentrado.
-            - **1000 a 1800:** Mercado moderadamente concentrado.
-            - **Acima de 1800:** Mercado altamente concentrado.
+            st.markdown("""
+                O **Índice Herfindahl-Hirschman (HHI)** é utilizado em análises antitruste para medir o grau de concentração em um mercado relevante.
+                
+                **Como é calculado?** 
+                        
+                O HHI é calculado com base no **somatório do quadrado das participações de mercado** ($s_i^2$) de todas as empresas de um dado mercado:
+                """)
+                
+            st.latex(r"HHI = \sum_{i=1}^{n} s_i^2")
+                
+            st.markdown("""
+                O índice pode chegar até **10.000 pontos**, valor que representa um **monopólio** (uma única empresa com 100% do mercado).
+
+                ---
+                
+                **Classificação do Mercado:**
+                        
+                * **Abaixo de 1000:** Mercado desconcentrado.
+                * **1000 a 1800:** Mercado moderadamente concentrado.
+                * **Acima de 1800:** Mercado altamente concentrado.
+                
+                ---
+                **Fonte:** [CADE - Guia de Termos](https://vcde.cade.gov.br/cadethes/pt-BR/page/indiceherfindahlhirschman?clang=pt-br)
             """)
 
     else:
@@ -235,9 +312,9 @@ elif secao == "HHI":
 elif secao in [
     "Análise por categoria",
     "Share dos grupos",
-    "Players ativos",
     "Share dos líderes",
     "Dispersão",
+    "Predição de audiência",
 ]:
     df_categoria_completa = carregar_categoria_completa(categoria_selecionada)
     df_cat = filtrar_top_medias(df_categoria_completa, n=10)
@@ -347,11 +424,6 @@ elif secao in [
         else:
             st.warning("Não foi possível calcular o share dos grupos.")
 
-    # =====================================================
-    # 5. PLAYERS ATIVOS
-    # =====================================================
-
-    elif secao == "Players ativos":
         st.markdown(f"#### Total de veículos ativos - {categoria_selecionada.capitalize()}")
 
         df_contagem_real = contar_players_ativos(categoria_selecionada)
@@ -372,8 +444,10 @@ elif secao in [
         else:
             st.warning("Não foi possível calcular a quantidade de players ativos.")
 
+        
+
     # =====================================================
-    # 6. SHARE DOS LÍDERES
+    # 5. SHARE DOS LÍDERES
     # =====================================================
 
     elif secao == "Share dos líderes":
@@ -408,7 +482,7 @@ elif secao in [
             st.warning("Não foi possível calcular o share dos líderes.")
 
     # =====================================================
-    # 7. DISPERSÃO
+    # 6. DISPERSÃO
     # =====================================================
 
     elif secao == "Dispersão":
@@ -462,6 +536,114 @@ elif secao in [
 
         else:
             st.warning(f"Não há dados disponíveis para gerar o gráfico de dispersão em {categoria_selecionada}.")
+
+
+    # =====================================================
+    # 7. PREDIÇÃO
+    # =====================================================
+
+    elif secao == "Predição de audiência":
+        st.markdown(f"#### Predição de audiência - {categoria_selecionada.capitalize()}")
+
+        midias_disponiveis = listar_midias_categoria(categoria_selecionada)
+
+        if not midias_disponiveis:
+            st.warning("Não há mídias disponíveis para essa categoria.")
+        else:
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                media_selecionada = st.selectbox(
+                    "Selecione a mídia",
+                    midias_disponiveis,
+                    key="sb_media_predicao"
+                )
+
+            with col2:
+                meses_futuros = st.selectbox(
+                    "Horizonte da previsão",
+                    [3, 6, 9, 12],
+                    index=1,
+                    key="sb_horizonte_predicao"
+                )
+
+            df_pred = prever_audiencia_regressao_exogenas(
+                categoria_selecionada,
+                media_selecionada,
+                meses_futuros=meses_futuros
+            )
+
+            if df_pred.empty:
+                st.warning("Não há dados suficientes para gerar a previsão dessa mídia.")
+            else:
+                fig_pred = px.line(
+                    df_pred,
+                    x='Date',
+                    y='Total_Real',
+                    color='tipo',
+                    markers=True,
+                    title=f"Série histórica, ajuste e previsão - {media_selecionada}",
+                    labels={
+                        'Date': 'Período',
+                        'Total_Real': 'Usuários únicos',
+                        'tipo': 'Série'
+                    },
+                    template="plotly_white",
+                    color_discrete_map={
+                        'Histórico': '#1f77b4',
+                        'Ajustado': '#2ca02c',
+                        'Previsto': '#ff7f0e'
+                    }
+                )
+
+                fig_pred.update_layout(
+                    hovermode="x unified",
+                    yaxis_tickformat=','
+                )
+
+                fig_pred.for_each_trace(
+                    lambda trace: trace.update(line=dict(dash='dot'))
+                    if trace.name == 'Ajustado' else ()
+                )
+
+                fig_pred.for_each_trace(
+                    lambda trace: trace.update(line=dict(dash='dash'))
+                    if trace.name == 'Previsto' else ()
+                )
+
+                st.plotly_chart(fig_pred, use_container_width=True)
+
+                st.caption(
+                    "Modelo de regressão linear com tendência temporal e variáveis exógenas específicas da categoria. "
+                    "A projeção deve ser interpretada como cenário-base, útil para capturar tendência e sazonalidade/eventos, "
+                    "mas não como previsão causal definitiva."
+                )
+
+            with st.expander("Ver métricas e coeficientes do modelo"):
+                df_metricas = avaliar_modelo_regressao_exogenas(
+                categoria_selecionada,
+                media_selecionada
+                )
+
+                if not df_metricas.empty:
+                    st.markdown("**Métricas do modelo**")
+                    st.dataframe(
+                        df_metricas.style.format({"Valor": "{:,.2f}"}),
+                        use_container_width=True
+                    )
+
+                df_coef = resumir_modelo_regressao_exogenas(
+                    categoria_selecionada,
+                    media_selecionada
+                )
+
+                if not df_coef.empty:
+                    st.markdown("**Coeficientes do modelo**")
+                    st.dataframe(
+                        df_coef.style.format({"Coeficiente": "{:,.2f}"}),
+                        use_container_width=True
+                    )
+
 
 # =========================================================
 # RODAPÉ
