@@ -13,10 +13,11 @@ from utils import (
     calcular_area_share_top_players,
     carregar_dados_dispersao,
     listar_midias_categoria,
-    carregar_serie_player,
     prever_audiencia_regressao_exogenas,
     resumir_modelo_regressao_exogenas,
     avaliar_modelo_regressao_exogenas,
+    dataframe_para_excel_bytes,
+    preparar_dataframe_exportacao,
     GROUP_SIZES
 )
 
@@ -28,6 +29,10 @@ st.set_page_config(
     page_title="Dashboard TCC - Audiência",
     layout="wide"
 )
+
+# =========================================================
+# CSS GLOBAL
+# =========================================================
 
 st.markdown(
     """
@@ -56,6 +61,42 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# =========================================================
+# HELPERS
+# =========================================================
+
+MAPA_CORES_CATEGORIAS = {
+    "News": "#FF4B4B",
+    "Entertainment": "#FFB618",
+    "Sports": "#3CC01B",
+    "Food": "#B3308B"
+}
+
+
+def style_variacao(val):
+    if val > 0:
+        return "color: #008000; font-weight: bold"
+    elif val < 0:
+        return "color: #FF0000; font-weight: bold"
+    return "color: gray"
+
+
+def render_download_excel(df, nome_arquivo: str, nome_aba: str, label: str, key: str):
+    df_export = preparar_dataframe_exportacao(df)
+
+    if df_export.empty:
+        return
+
+    excel_bytes = dataframe_para_excel_bytes(df_export, nome_aba=nome_aba)
+
+    st.download_button(
+        label=label,
+        data=excel_bytes,
+        file_name=nome_arquivo,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=key
+    )
+
 
 # =========================================================
 # SIDEBAR - NAVEGAÇÃO
@@ -79,11 +120,11 @@ st.sidebar.markdown(
     }
 
     .logo-market {
-        color: #49aee9;   /* azul claro */
+        color: #49aee9;
     }
 
     .logo-scope {
-        color: #0b3f78;   /* azul escuro */
+        color: #0b3f78;
     }
 
     .logo-subtitle {
@@ -98,10 +139,9 @@ st.sidebar.markdown(
     }
 
     section[data-testid="stSidebar"] .categoria-wrap {
-    margin-top: -14px;
-    padding-top: 0;
+        margin-top: -14px;
+        padding-top: 0;
     }
-
     </style>
 
     <div class="logo-wrap">
@@ -138,33 +178,12 @@ if secao in [
     "Dispersão",
     "Predição de audiência",
 ]:
-
     st.sidebar.markdown('<div class="categoria-wrap">', unsafe_allow_html=True)
     categoria_selecionada = st.sidebar.selectbox(
         "Categoria",
         ["news", "entretenimento", "sports", "food"],
         key="sidebar_categoria"
     )
-
-# =========================================================
-# HELPERS VISUAIS
-# =========================================================
-
-MAPA_CORES_CATEGORIAS = {
-    'News': '#FF4B4B',
-    'Entertainment': "#FFB618",
-    'Sports': "#3CC01B",
-    'Food': "#B3308B"
-}
-
-
-def style_variacao(val):
-    if val > 0:
-        return 'color: #008000; font-weight: bold'
-    elif val < 0:
-        return 'color: #FF0000; font-weight: bold'
-    return 'color: gray'
-
 
 # =========================================================
 # 1. VISÃO GERAL POR CATEGORIA
@@ -178,9 +197,9 @@ if secao == "Visão geral por categoria":
     if not df_final.empty:
         fig = px.line(
             df_final,
-            x='Date',
-            y='Total_Real',
-            color='Categoria',
+            x="Date",
+            y="Total_Real",
+            color="Categoria",
             color_discrete_map=MAPA_CORES_CATEGORIAS,
             markers=True,
             title="Evolução Mensal de Usuários Únicos por Categoria (Comscore)",
@@ -194,16 +213,23 @@ if secao == "Visão geral por categoria":
 
         fig.update_layout(
             hovermode="x unified",
-            legend_title_text='Categorias',
-            yaxis_tickformat=','
+            legend_title_text="Categorias",
+            yaxis_tickformat=","
         )
 
         st.plotly_chart(fig, use_container_width=True)
+        render_download_excel(
+            df_final,
+            "visao_geral_categoria.xlsx",
+            "visao_geral",
+            "Download",
+            "download_visao_geral"
+        )
 
         st.markdown("#### Variação mensal e anual por categoria")
 
-        datas_disponiveis = sorted(df_final['Date'].unique(), reverse=True)
-        opcoes_datas = {d.strftime('%B / %Y'): d for d in datas_disponiveis}
+        datas_disponiveis = sorted(df_final["Date"].unique(), reverse=True)
+        opcoes_datas = {d.strftime("%B / %Y"): d for d in datas_disponiveis}
 
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -217,16 +243,25 @@ if secao == "Visão geral por categoria":
         df_var = calcular_variacoes(df_final, data_ref)
 
         nome_coluna_audiencia = f"Audiência Total ({mes_selecionado_str})"
-        df_var = df_var.rename(columns={'Audiência Total': nome_coluna_audiencia})
+        df_var = df_var.rename(columns={"Audiência Total": nome_coluna_audiencia})
 
         st.dataframe(
             df_var.style.format({
-                nome_coluna_audiencia: '{:,.0f}',
-                'Variação MoM (%)': '{:+.2f}%',
-                'Variação YoY (%)': '{:+.2f}%'
-            }).map(style_variacao, subset=['Variação MoM (%)', 'Variação YoY (%)']),
+                nome_coluna_audiencia: "{:,.0f}",
+                "Variação MoM (%)": "{:+.2f}%",
+                "Variação YoY (%)": "{:+.2f}%"
+            }).map(style_variacao, subset=["Variação MoM (%)", "Variação YoY (%)"]),
             use_container_width=True
         )
+
+        render_download_excel(
+            df_var,
+            f"variacoes_categoria_{mes_selecionado_str}.xlsx",
+            "variacoes",
+            "Download",
+            "download_variacoes_categoria"
+        )
+
     else:
         st.error("Arquivos não encontrados na pasta 'data/'.")
 
@@ -242,13 +277,13 @@ elif secao == "HHI":
     if not df_hhi.empty:
         fig_hhi = px.line(
             df_hhi,
-            x='Data',
-            y='HHI',
-            color='Categoria',
+            x="Data",
+            y="HHI",
+            color="Categoria",
             color_discrete_map=MAPA_CORES_CATEGORIAS,
             markers=True,
             title="Evolução do Índice Herfindahl-Hirschman (HHI)",
-            labels={'HHI': 'Índice HHI', 'Data': 'Período'},
+            labels={"HHI": "Índice HHI", "Data": "Período"},
             template="plotly_white"
         )
 
@@ -269,39 +304,45 @@ elif secao == "HHI":
         )
 
         fig_hhi.update_layout(
-            yaxis_range=[0, max(df_hhi['HHI'].max() + 500, 2000)],
+            yaxis_range=[0, max(df_hhi["HHI"].max() + 500, 2000)],
             hovermode="x unified"
         )
 
         st.plotly_chart(fig_hhi, use_container_width=True)
+        render_download_excel(
+            df_hhi,
+            "hhi_categoria.xlsx",
+            "hhi",
+            "Download",
+            "download_hhi"
+        )
 
-        # Texto explicativo sobre a métrica utilizada
         with st.expander("O que esses valores significam?"):
             st.markdown("""
                 O **Índice Herfindahl-Hirschman (HHI)** é utilizado em análises antitruste para medir o grau de concentração em um mercado relevante.
-                
-                **Como é calculado?** 
-                        
+
+                **Como é calculado?**
+
                 O HHI é calculado com base no **somatório do quadrado das participações de mercado** ($s_i^2$) de todas as empresas de um dado mercado:
-                """)
-                
+            """)
+
             st.latex(r"HHI = \sum_{i=1}^{n} s_i^2")
-                
+
             st.markdown("""
                 O índice pode chegar até **10.000 pontos**, valor que representa um **monopólio** (uma única empresa com 100% do mercado).
 
                 ---
-                
+
                 **Classificação do Mercado:**
-                        
+
                 * **Abaixo de 1000:** Mercado desconcentrado.
                 * **1000 a 1800:** Mercado moderadamente concentrado.
                 * **Acima de 1800:** Mercado altamente concentrado.
-                
+
                 ---
+
                 **Fonte:** [CADE - Guia de Termos](https://vcde.cade.gov.br/cadethes/pt-BR/page/indiceherfindahlhirschman?clang=pt-br)
             """)
-
     else:
         st.warning("Não foi possível calcular o HHI com os dados disponíveis.")
 
@@ -329,9 +370,9 @@ elif secao in [
         if not df_cat.empty:
             fig_cat = px.line(
                 df_cat,
-                x='Date',
-                y='Total_Real',
-                color='Media',
+                x="Date",
+                y="Total_Real",
+                color="Media",
                 markers=True,
                 title=f"Evolução Mensal: Principais Veículos de {categoria_selecionada.capitalize()}",
                 labels={"Total_Real": "Visitantes Únicos", "Date": "Período", "Media": "Veículo"},
@@ -340,16 +381,23 @@ elif secao in [
 
             fig_cat.update_layout(
                 hovermode="x unified",
-                yaxis_tickformat=',',
-                legend_title_text='Veículos'
+                yaxis_tickformat=",",
+                legend_title_text="Veículos"
             )
 
             st.plotly_chart(fig_cat, use_container_width=True)
+            render_download_excel(
+                df_cat,
+                f"analise_categoria_{categoria_selecionada}.xlsx",
+                "analise_categoria",
+                "Download",
+                "download_analise_categoria"
+            )
 
             st.markdown("#### Variação mensal e anual dos veículos")
 
-            datas_cat = sorted(df_cat['Date'].unique(), reverse=True)
-            opcoes_datas_cat = {d.strftime('%B / %Y'): d for d in datas_cat}
+            datas_cat = sorted(df_cat["Date"].unique(), reverse=True)
+            opcoes_datas_cat = {d.strftime("%B / %Y"): d for d in datas_cat}
 
             col1, col2 = st.columns([1, 2])
             with col1:
@@ -363,15 +411,23 @@ elif secao in [
             df_var_veiculos = calcular_variacoes_veiculos(df_cat, data_ref_veiculo)
 
             col_audiencia = f"Audiência ({mes_tab_veiculo})"
-            df_var_veiculos = df_var_veiculos.rename(columns={'Audiência Total': col_audiencia})
+            df_var_veiculos = df_var_veiculos.rename(columns={"Audiência Total": col_audiencia})
 
             st.dataframe(
                 df_var_veiculos.style.format({
-                    col_audiencia: '{:,.0f}',
-                    'Variação MoM (%)': '{:+.2f}%',
-                    'Variação YoY (%)': '{:+.2f}%'
-                }).map(style_variacao, subset=['Variação MoM (%)', 'Variação YoY (%)']),
+                    col_audiencia: "{:,.0f}",
+                    "Variação MoM (%)": "{:+.2f}%",
+                    "Variação YoY (%)": "{:+.2f}%"
+                }).map(style_variacao, subset=["Variação MoM (%)", "Variação YoY (%)"]),
                 use_container_width=True
+            )
+
+            render_download_excel(
+                df_var_veiculos,
+                f"variacoes_veiculos_{categoria_selecionada}_{mes_tab_veiculo}.xlsx",
+                "variacoes_veiculos",
+                "Download",
+                "download_variacoes_veiculos"
             )
         else:
             st.warning(f"Não foi possível carregar os dados de {categoria_selecionada}.")
@@ -387,64 +443,49 @@ elif secao in [
 
         if not df_share_grupos.empty:
             df_plot = df_share_grupos.melt(
-                id_vars=['Date'],
-                var_name='Grupo',
-                value_name='Percentual'
+                id_vars=["Date"],
+                var_name="Grupo",
+                value_name="Percentual"
             )
 
             top_x, next_y = GROUP_SIZES.get(categoria_selecionada, (5, 10))
             mapa_grupos = {
-                f"Top {top_x} Players": '#1f77b4',
-                f"Próximos {next_y} Players": '#ff7f0e',
-                'Players Restantes': '#7f7f7f'
+                f"Top {top_x} Players": "#1f77b4",
+                f"Próximos {next_y} Players": "#ff7f0e",
+                "Players Restantes": "#7f7f7f"
             }
 
             fig_share = px.line(
                 df_plot,
-                x='Date',
-                y='Percentual',
-                color='Grupo',
+                x="Date",
+                y="Percentual",
+                color="Grupo",
                 title=f"Concentração de Share: {categoria_selecionada.capitalize()}",
-                labels={'Percentual': 'Share de audiência', 'Date': 'Período'},
+                labels={"Percentual": "Share de audiência", "Date": "Período"},
                 markers=True,
                 template="plotly_white",
                 color_discrete_map=mapa_grupos
             )
 
             fig_share.update_layout(
-                yaxis_tickformat='.1%',
+                yaxis_tickformat=".1%",
                 hovermode="x unified"
             )
 
             st.plotly_chart(fig_share, use_container_width=True)
+            render_download_excel(
+                df_plot,
+                f"share_grupos_{categoria_selecionada}.xlsx",
+                "share_grupos",
+                "Download",
+                "download_share_grupos"
+            )
 
             st.caption(
                 "Metodologia: os grupos são fixos e definidos pela média histórica de share dos veículos na categoria completa."
             )
         else:
             st.warning("Não foi possível calcular o share dos grupos.")
-
-        st.markdown(f"#### Total de veículos ativos - {categoria_selecionada.capitalize()}")
-
-        df_contagem_real = contar_players_ativos(categoria_selecionada)
-
-        if not df_contagem_real.empty:
-            fig_barra = px.bar(
-                df_contagem_real,
-                x='Date',
-                y='Quantidade de Players',
-                title=f"Total de Veículos com Audiência Ativa (>0) - {categoria_selecionada.capitalize()}",
-                labels={'Quantidade de Players': 'Nº de Veículos', 'Date': 'Período'},
-                template="plotly_white",
-                text_auto=True
-            )
-
-            fig_barra.update_traces(marker_color='#004A88', opacity=0.8)
-            st.plotly_chart(fig_barra, use_container_width=True)
-        else:
-            st.warning("Não foi possível calcular a quantidade de players ativos.")
-
-        
 
     # =====================================================
     # 5. SHARE DOS LÍDERES
@@ -458,24 +499,31 @@ elif secao in [
         if not df_area.empty:
             fig_area = px.area(
                 df_area,
-                x='Date',
-                y='share',
-                color='Media',
+                x="Date",
+                y="share",
+                color="Media",
                 title=f"Evolução do Market Share: Líderes Individuais em {categoria_selecionada.capitalize()}",
-                labels={'share': 'Market Share (%)', 'Date': 'Período', 'Media': 'Veículo'},
+                labels={"share": "Market Share (%)", "Date": "Período", "Media": "Veículo"},
                 template="plotly_white",
                 category_orders={
-                    "Media": df_area.groupby('Media')['share'].mean().sort_values(ascending=False).index.tolist()
+                    "Media": df_area.groupby("Media")["share"].mean().sort_values(ascending=False).index.tolist()
                 }
             )
 
             fig_area.update_layout(
-                yaxis_tickformat='.1%',
+                yaxis_tickformat=".1%",
                 yaxis_range=[0, 1],
                 hovermode="x unified"
             )
 
             st.plotly_chart(fig_area, use_container_width=True)
+            render_download_excel(
+                df_area,
+                f"share_lideres_{categoria_selecionada}.xlsx",
+                "share_lideres",
+                "Download",
+                "download_share_lideres"
+            )
 
             st.caption("Market share calculado sobre o total da categoria em cada mês.")
         else:
@@ -491,8 +539,8 @@ elif secao in [
         df_disp_full = carregar_dados_dispersao(categoria_selecionada)
 
         if not df_disp_full.empty:
-            datas_disponiveis = sorted(df_disp_full['Date'].unique(), reverse=True)
-            opcoes_datas_disp = {d.strftime('%B / %Y'): d for d in datas_disponiveis}
+            datas_disponiveis = sorted(df_disp_full["Date"].unique(), reverse=True)
+            opcoes_datas_disp = {d.strftime("%B / %Y"): d for d in datas_disponiveis}
 
             col1, col2 = st.columns([1, 2])
             with col1:
@@ -503,40 +551,46 @@ elif secao in [
                 )
 
             data_ref_scatter = opcoes_datas_disp[mes_selecionado_str]
-            df_mes_plot = df_disp_full[df_disp_full['Date'] == data_ref_scatter]
+            df_mes_plot = df_disp_full[df_disp_full["Date"] == data_ref_scatter]
 
             fig_disp = px.scatter(
                 df_mes_plot,
-                x='Usuarios_Scatter',
-                y='Visitas_Scatter',
-                color='Media',
-                hover_name='Media',
-                text='Media',
+                x="Usuarios_Scatter",
+                y="Visitas_Scatter",
+                color="Media",
+                hover_name="Media",
+                text="Media",
                 title=f"Posicionamento de Mercado: {mes_selecionado_str}",
                 labels={
-                    'Usuarios_Scatter': 'Usuários Únicos',
-                    'Visitas_Scatter': 'Total de Visitas'
+                    "Usuarios_Scatter": "Usuários Únicos",
+                    "Visitas_Scatter": "Total de Visitas"
                 },
                 template="plotly_white"
             )
 
             fig_disp.update_traces(
-                marker=dict(size=14, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
-                textposition='top center'
+                marker=dict(size=14, opacity=0.8, line=dict(width=1, color="DarkSlateGrey")),
+                textposition="top center"
             )
 
             fig_disp.update_layout(
-                xaxis_tickformat=',',
-                yaxis_tickformat=',',
+                xaxis_tickformat=",",
+                yaxis_tickformat=",",
                 hovermode="closest",
                 showlegend=False
             )
 
             st.plotly_chart(fig_disp, use_container_width=True)
+            render_download_excel(
+                df_mes_plot,
+                f"dispersao_{categoria_selecionada}_{mes_selecionado_str}.xlsx",
+                "dispersao",
+                "Download",
+                "download_dispersao"
+            )
 
         else:
             st.warning(f"Não há dados disponíveis para gerar o gráfico de dispersão em {categoria_selecionada}.")
-
 
     # =====================================================
     # 7. PREDIÇÃO
@@ -578,40 +632,47 @@ elif secao in [
             else:
                 fig_pred = px.line(
                     df_pred,
-                    x='Date',
-                    y='Total_Real',
-                    color='tipo',
+                    x="Date",
+                    y="Total_Real",
+                    color="tipo",
                     markers=True,
                     title=f"Série histórica, ajuste e previsão - {media_selecionada}",
                     labels={
-                        'Date': 'Período',
-                        'Total_Real': 'Usuários únicos',
-                        'tipo': 'Série'
+                        "Date": "Período",
+                        "Total_Real": "Usuários únicos",
+                        "tipo": "Série"
                     },
                     template="plotly_white",
                     color_discrete_map={
-                        'Histórico': '#1f77b4',
-                        'Ajustado': '#2ca02c',
-                        'Previsto': '#ff7f0e'
+                        "Histórico": "#1f77b4",
+                        "Ajustado": "#2ca02c",
+                        "Previsto": "#ff7f0e"
                     }
                 )
 
                 fig_pred.update_layout(
                     hovermode="x unified",
-                    yaxis_tickformat=','
+                    yaxis_tickformat=","
                 )
 
                 fig_pred.for_each_trace(
-                    lambda trace: trace.update(line=dict(dash='dot'))
-                    if trace.name == 'Ajustado' else ()
+                    lambda trace: trace.update(line=dict(dash="dot"))
+                    if trace.name == "Ajustado" else ()
                 )
 
                 fig_pred.for_each_trace(
-                    lambda trace: trace.update(line=dict(dash='dash'))
-                    if trace.name == 'Previsto' else ()
+                    lambda trace: trace.update(line=dict(dash="dash"))
+                    if trace.name == "Previsto" else ()
                 )
 
                 st.plotly_chart(fig_pred, use_container_width=True)
+                render_download_excel(
+                    df_pred,
+                    f"predicao_{categoria_selecionada}_{media_selecionada}.xlsx",
+                    "predicao",
+                    "Download",
+                    "download_predicao"
+                )
 
                 st.caption(
                     "Modelo de regressão linear com tendência temporal e variáveis exógenas específicas da categoria. "
@@ -619,31 +680,44 @@ elif secao in [
                     "mas não como previsão causal definitiva."
                 )
 
-            with st.expander("Ver métricas e coeficientes do modelo"):
-                df_metricas = avaliar_modelo_regressao_exogenas(
-                categoria_selecionada,
-                media_selecionada
-                )
-
-                if not df_metricas.empty:
-                    st.markdown("**Métricas do modelo**")
-                    st.dataframe(
-                        df_metricas.style.format({"Valor": "{:,.2f}"}),
-                        use_container_width=True
+                with st.expander("Ver métricas e coeficientes do modelo"):
+                    df_metricas = avaliar_modelo_regressao_exogenas(
+                        categoria_selecionada,
+                        media_selecionada
                     )
 
-                df_coef = resumir_modelo_regressao_exogenas(
-                    categoria_selecionada,
-                    media_selecionada
-                )
+                    if not df_metricas.empty:
+                        st.markdown("**Métricas do modelo**")
+                        st.dataframe(
+                            df_metricas.style.format({"Valor": "{:,.2f}"}),
+                            use_container_width=True
+                        )
+                        render_download_excel(
+                            df_metricas,
+                            f"metricas_modelo_{categoria_selecionada}_{media_selecionada}.xlsx",
+                            "metricas",
+                            "Download",
+                            "download_metricas_modelo"
+                        )
 
-                if not df_coef.empty:
-                    st.markdown("**Coeficientes do modelo**")
-                    st.dataframe(
-                        df_coef.style.format({"Coeficiente": "{:,.2f}"}),
-                        use_container_width=True
+                    df_coef = resumir_modelo_regressao_exogenas(
+                        categoria_selecionada,
+                        media_selecionada
                     )
 
+                    if not df_coef.empty:
+                        st.markdown("**Coeficientes do modelo**")
+                        st.dataframe(
+                            df_coef.style.format({"Coeficiente": "{:,.2f}"}),
+                            use_container_width=True
+                        )
+                        render_download_excel(
+                            df_coef,
+                            f"coeficientes_modelo_{categoria_selecionada}_{media_selecionada}.xlsx",
+                            "coeficientes",
+                            "Download",
+                            "download_coeficientes_modelo"
+                        )
 
 # =========================================================
 # RODAPÉ

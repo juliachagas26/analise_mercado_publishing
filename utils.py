@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from io import BytesIO
 
 
 # =========================================================
@@ -127,6 +128,28 @@ def _ler_excel(caminho: str) -> pd.DataFrame:
     df.columns = [str(col).strip() for col in df.columns]
     return df
 
+def dataframe_para_excel_bytes(df: pd.DataFrame, nome_aba: str = "dados") -> bytes:
+    """
+    Converte um DataFrame em bytes de um arquivo Excel.
+    Exporta apenas um DataFrame por arquivo.
+    """
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=nome_aba[:31])
+
+    return output.getvalue()
+
+
+def preparar_dataframe_exportacao(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Garante que o DataFrame exportado não contenha index visual
+    e esteja pronto para download.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    return df.copy().reset_index(drop=True)
 
 # =========================================================
 # BASE CONSOLIDADA DAS CATEGORIAS
