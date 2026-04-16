@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
 
 from utils import (
     carregar_dados_consolidadores,
@@ -13,6 +14,9 @@ from utils import (
     calcular_area_share_top_players,
     carregar_dados_dispersao,
     listar_midias_categoria,
+    prever_audiencia_regressao_linear,
+    avaliar_modelo_regressao_linear,
+    resumir_modelo_regressao_linear,
     prever_audiencia_regressao_exogenas,
     resumir_modelo_regressao_exogenas,
     avaliar_modelo_regressao_exogenas,
@@ -645,11 +649,107 @@ elif secao in [
                     key="sb_horizonte_predicao"
                 )
 
-            df_pred = prever_audiencia_regressao_exogenas(
-                categoria_selecionada,
-                media_selecionada,
-                meses_futuros=meses_futuros
+
+            st.markdown("Ambiente de modelos")
+
+            st.caption(
+                "É possível escolher os modelos de predição entre os disponíveis e instalar novos modelos"
             )
+
+            if "modelos_instalados" not in st.session_state:
+                st.session_state["modelos_instalados"] = {}
+
+            serie_id = f"{categoria_selecionada}_{media_selecionada}"
+
+            if serie_id not in st.session_state["modelos_instalados"]:
+                st.session_state["modelos_instalados"][serie_id] = [
+                    "Regressão linear simples",
+                    "Regressão linear com exógenas"
+                ]
+
+            col_modelo1, col_modelo2 = st.columns([2, 1])
+
+            with col_modelo1:
+                modelo_novo = st.selectbox(
+                    "Modelo disponível para instalação",
+                    [
+                        "SARIMA",
+                        "Prophet",
+                        "Random Forest",
+                        "XGBoost"
+                    ],
+                    key=f"modelo_para_instalar_{serie_id}"
+                )
+
+            with col_modelo2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Instalar modelo", key=f"btn_instalar_modelo_{serie_id}"):
+                    if modelo_novo not in st.session_state["modelos_instalados"][serie_id]:
+                        st.session_state["modelos_instalados"][serie_id].append(modelo_novo)
+                        st.success(f"Modelo '{modelo_novo}' adicionado ao ambiente da série.")
+                    else:
+                        st.info(f"O modelo '{modelo_novo}' já está instalado para essa série.")
+
+            modelo_ativo = st.selectbox(
+                "Modelo ativo",
+                st.session_state["modelos_instalados"][serie_id],
+                key=f"modelo_ativo_{serie_id}"
+            )
+
+            df_pred = pd.DataFrame()
+            df_metricas = pd.DataFrame()
+            df_coef = pd.DataFrame()
+            caption_modelo = ""
+
+            if modelo_ativo == "Regressão linear simples":
+                df_pred = prever_audiencia_regressao_linear(
+                    categoria_selecionada,
+                    media_selecionada,
+                    meses_futuros=meses_futuros
+                )
+                df_metricas = avaliar_modelo_regressao_linear(
+                    categoria_selecionada,
+                    media_selecionada
+                )
+
+                df_coef = resumir_modelo_regressao_linear(
+                    categoria_selecionada,
+                    media_selecionada
+                )
+
+                caption_modelo = (
+                    "Modelo-base de regressão linear simples usando apenas tendência temporal."
+                    "Útil como linha de base comparativa, mas limitado para capturar sazonalidade e choques específicos."
+                )
+
+            elif modelo_ativo == "Regressão linear com exógenas":
+                df_pred = prever_audiencia_regressao_exogenas(
+                    categoria_selecionada,
+                    media_selecionada,
+                    meses_futuros=meses_futuros
+                )
+
+                df_metricas = avaliar_modelo_regressao_exogenas(
+                    categoria_selecionada,
+                    media_selecionada
+                )
+
+                df_coef = resumir_modelo_regressao_exogenas(
+                    categoria_selecionada,
+                    media_selecionada
+                )
+
+                caption_modelo = (
+                    "Modelo de regressão linear com tendência temporal e variáveis exógenas específicas da categoria. "
+                    "A projeção deve ser interpretada como cenário-base, útil para capturar tendência e sazonalidade/eventos, "
+                    "mas não como previsão causal definitiva."
+                )
+
+            else:
+                st.info(
+                    f"O modelo '{modelo_ativo}' está representado no framework como extensão futura. "
+                    "Nesta versão do protótipo, apenas a regressão linear simples e a regressão linear com exógenas estão operacionais."
+                )
 
             if df_pred.empty:
                 st.warning("Não há dados suficientes para gerar a previsão dessa mídia.")

@@ -496,7 +496,7 @@ def prever_audiencia_regressao_linear(
     - Date
     - Media
     - Total_Real
-    - tipo ("Histórico" ou "Previsto")
+    - tipo ("Histórico", "Ajustado" ou "Previsto")
     """
     df_player = carregar_serie_player(nome_categoria, media)
 
@@ -514,6 +514,16 @@ def prever_audiencia_regressao_linear(
     modelo = LinearRegression()
     modelo.fit(X, y)
 
+    # histórico real
+    df_hist = df_player[["Date", "Media", "Total_Real"]].copy()
+    df_hist["tipo"] = "Histórico"
+
+    # histórico ajustado
+    df_fit = df_player[["Date", "Media"]].copy()
+    df_fit["Total_Real"] = modelo.predict(X)
+    df_fit["Total_Real"] = np.maximum(df_fit["Total_Real"], 0)
+    df_fit["tipo"] = "Ajustado"
+
     # histórico ajustado não será mostrado como fitted, só usamos a previsão futura
     ultimo_t = df_player['t'].max()
     ultima_data = df_player['Date'].max()
@@ -530,9 +540,6 @@ def prever_audiencia_regressao_linear(
     # evita previsão negativa
     y_prev = np.maximum(y_prev, 0)
 
-    df_hist = df_player[['Date', 'Media', 'Total_Real']].copy()
-    df_hist['tipo'] = 'Histórico'
-
     df_prev = pd.DataFrame({
         'Date': datas_futuras,
         'Media': media,
@@ -540,7 +547,67 @@ def prever_audiencia_regressao_linear(
         'tipo': 'Previsto'
     })
 
-    return pd.concat([df_hist, df_prev], ignore_index=True)
+    return pd.concat([df_hist, df_fit, df_prev], ignore_index=True)
+
+@st.cache_data
+def avaliar_modelo_regressao_linear(nome_categoria: str, media: str) -> pd.DataFrame:
+    """
+    Retorna métricas de ajuste da regressão linear simples.
+    """
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 3:
+        return pd.DataFrame()
+
+    df = df_player.copy().sort_values("Date").reset_index(drop=True)
+    df["t"] = np.arange(len(df))
+
+    X = df[["t"]]
+    y = df["Total_Real"]
+
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+
+    y_pred = modelo.predict(X)
+    y_pred = np.maximum(y_pred, 0)
+
+    mae = np.mean(np.abs(y - y_pred))
+    y_safe = np.where(y == 0, np.nan, y)
+    mape = np.nanmean(np.abs((y - y_pred) / y_safe)) * 100
+    r2 = modelo.score(X, y)
+
+    return pd.DataFrame({
+        "Métrica": ["R²", "MAE", "MAPE (%)", "N observações"],
+        "Valor": [r2, mae, mape, len(df)]
+    })
+
+
+@st.cache_data
+def resumir_modelo_regressao_linear(nome_categoria: str, media: str) -> pd.DataFrame:
+    """
+    Retorna os coeficientes da regressão linear simples.
+    """
+    df_player = carregar_serie_player(nome_categoria, media)
+
+    if df_player.empty or len(df_player) < 3:
+        return pd.DataFrame()
+
+    df = df_player.copy().sort_values("Date").reset_index(drop=True)
+    df["t"] = np.arange(len(df))
+
+    X = df[["t"]]
+    y = df["Total_Real"]
+
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+
+    return pd.DataFrame({
+        "Variável": ["Intercepto", "t"],
+        "Coeficiente": [modelo.intercept_, modelo.coef_[0]]
+    })
+
+
+
 
 @st.cache_data
 def adicionar_exogenas_categoria(df: pd.DataFrame, categoria: str) -> pd.DataFrame:
