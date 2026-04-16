@@ -487,6 +487,30 @@ elif secao in [
         else:
             st.warning("Não foi possível calcular o share dos grupos.")
 
+        # ===================  CONTAGEM DE PLAYERS ======================
+
+        st.divider()
+
+        st.markdown(f"#### Total de veículos ativos - {categoria_selecionada.capitalize()}")
+
+        df_contagem_real = contar_players_ativos(categoria_selecionada)        
+
+        if not df_contagem_real.empty:
+            fig_barra = px.bar(
+                df_contagem_real,
+                x='Date',
+                y='Quantidade de Players',
+                title=f"Total de Veículos com Audiência Ativa (>0) - {categoria_selecionada.capitalize()}",
+                labels={'Quantidade de Players': 'Nº de Veículos', 'Date': 'Período'},
+                template="plotly_white",
+                text_auto=True
+            )
+
+            fig_barra.update_traces(marker_color='#004A88', opacity=0.8)
+            st.plotly_chart(fig_barra, use_container_width=True)
+        else:
+            st.warning("Não foi possível calcular a quantidade de players ativos.")
+
     # =====================================================
     # 5. SHARE DOS LÍDERES
     # =====================================================
