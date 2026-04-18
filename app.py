@@ -384,7 +384,7 @@ elif secao in [
             )
 
             fig_cat.update_layout(
-                hovermode="x unified",
+                hovermode="closest",
                 yaxis_tickformat=",",
                 legend_title_text="Veículos"
             )
@@ -541,7 +541,7 @@ elif secao in [
             fig_area.update_layout(
                 yaxis_tickformat=".1%",
                 yaxis_range=[0, 1],
-                hovermode="x unified"
+                hovermode="closest"
             )
 
             st.plotly_chart(fig_area, use_container_width=True)
@@ -681,6 +681,13 @@ elif secao in [
                     key=f"modelo_para_instalar_{serie_id}"
                 )
 
+            modelo_customizado = st.text_input(
+                "Outro modelo",
+                placeholder="Ex.: LSTM, ARIMA sazonal, Prophet com regressoras...",
+                key=f"modelo_customizado_{serie_id}"
+            )
+
+
             with col_modelo2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("Instalar modelo", key=f"btn_instalar_modelo_{serie_id}"):
@@ -798,17 +805,9 @@ elif secao in [
                     "download_predicao"
                 )
 
-                st.caption(
-                    "Modelo de regressão linear com tendência temporal e variáveis exógenas específicas da categoria. "
-                    "A projeção deve ser interpretada como cenário-base, útil para capturar tendência e sazonalidade/eventos, "
-                    "mas não como previsão causal definitiva."
-                )
+                st.caption(caption_modelo)
 
                 with st.expander("Ver métricas e coeficientes do modelo"):
-                    df_metricas = avaliar_modelo_regressao_exogenas(
-                        categoria_selecionada,
-                        media_selecionada
-                    )
 
                     if not df_metricas.empty:
                         st.markdown("**Métricas do modelo**")
@@ -823,11 +822,6 @@ elif secao in [
                             "Download",
                             "download_metricas_modelo"
                         )
-
-                    df_coef = resumir_modelo_regressao_exogenas(
-                        categoria_selecionada,
-                        media_selecionada
-                    )
 
                     if not df_coef.empty:
                         st.markdown("**Coeficientes do modelo**")
