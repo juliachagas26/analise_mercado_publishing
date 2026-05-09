@@ -48,6 +48,7 @@ MONTH_MAP = {
 }
 
 
+
 # =========================================================
 # HELPERS
 # =========================================================
@@ -173,10 +174,10 @@ def carregar_dados_consolidadores(diretorio_dados: str) -> pd.DataFrame:
             continue
 
         df_categoria = df[df['Media'].astype(str).str.strip() == regra['filtro_total']].copy()
-        df_categoria['Total_Real'] = _ajustar_escala_serie(df_categoria[col_users], col_users)
+        df_categoria['Usuarios_Real'] = _ajustar_escala_serie(df_categoria[col_users], col_users)
         df_categoria['Categoria'] = regra['label']
 
-        lista_frames.append(df_categoria[['Date', 'Categoria', 'Total_Real']])
+        lista_frames.append(df_categoria[['Date', 'Categoria', 'Usuarios_Real']])
 
     if lista_frames:
         return pd.concat(lista_frames, ignore_index=True).sort_values(['Categoria', 'Date'])
@@ -189,12 +190,12 @@ def calcular_variacoes(df: pd.DataFrame, data_selecionada) -> pd.DataFrame:
     df = df.copy()
     df = df.sort_values(['Categoria', 'Date'])
 
-    df['MoM (%)'] = df.groupby('Categoria')['Total_Real'].pct_change(periods=1) * 100
-    df['YoY (%)'] = df.groupby('Categoria')['Total_Real'].pct_change(periods=12) * 100
+    df['MoM (%)'] = df.groupby('Categoria')['Usuarios_Real'].pct_change(periods=1) * 100
+    df['YoY (%)'] = df.groupby('Categoria')['Usuarios_Real'].pct_change(periods=12) * 100
 
     df_filtrado = df[df['Date'] == data_selecionada].copy()
 
-    tabela = df_filtrado[['Categoria', 'Total_Real', 'MoM (%)', 'YoY (%)']].copy()
+    tabela = df_filtrado[['Categoria', 'Usuarios_Real', 'MoM (%)', 'YoY (%)']].copy()
     tabela.columns = ['Categoria', 'Audiência Total', 'Variação MoM (%)', 'Variação YoY (%)']
 
     return tabela.sort_values('Categoria')
@@ -271,16 +272,16 @@ def carregar_categoria_completa(nome_categoria: str, diretorio_dados: str = "dat
 
     df = df[df['Media'].astype(str).str.strip() != regra['filtro_total']].copy()
 
-    df['Total_Real'] = _ajustar_escala_serie(df[col_users], col_users)
+    df['Usuarios_Real'] = _ajustar_escala_serie(df[col_users], col_users)
 
     if col_visits is not None:
         df['Visits_Real'] = _ajustar_escala_serie(df[col_visits], col_visits)
     else:
         df['Visits_Real'] = pd.NA
 
-    df = df.dropna(subset=['Date', 'Total_Real'])
+    df = df.dropna(subset=['Date', 'Usuarios_Real'])
 
-    cols_saida = ['Date', 'Media', 'Total_Real', 'Visits_Real', 'Year', 'Month']
+    cols_saida = ['Date', 'Media', 'Usuarios_Real', 'Visits_Real', 'Year', 'Month']
     cols_saida = [c for c in cols_saida if c in df.columns]
 
     return df[cols_saida].sort_values(['Date', 'Media']).reset_index(drop=True)
@@ -294,7 +295,7 @@ def filtrar_top_medias(df_categoria_completa: pd.DataFrame, n: int = 10) -> pd.D
     df = df_categoria_completa.copy()
 
     top_medias = (
-        df.groupby('Media')['Total_Real']
+        df.groupby('Media')['Usuarios_Real']
         .mean()
         .nlargest(n)
         .index
@@ -328,13 +329,13 @@ def calcular_variacoes_veiculos(df_detalhado: pd.DataFrame, data_selecionada) ->
     df = df_detalhado.copy()
     df = df.sort_values(['Media', 'Date'])
 
-    df['MoM (%)'] = df.groupby('Media')['Total_Real'].pct_change(periods=1) * 100
-    df['YoY (%)'] = df.groupby('Media')['Total_Real'].pct_change(periods=12) * 100
+    df['MoM (%)'] = df.groupby('Media')['Usuarios_Real'].pct_change(periods=1) * 100
+    df['YoY (%)'] = df.groupby('Media')['Usuarios_Real'].pct_change(periods=12) * 100
 
     df_mes = df[df['Date'] == data_selecionada].copy()
-    tabela_top10 = df_mes.nlargest(10, 'Total_Real')
+    tabela_top10 = df_mes.nlargest(10, 'Usuarios_Real')
 
-    tabela = tabela_top10[['Media', 'Total_Real', 'MoM (%)', 'YoY (%)']].copy()
+    tabela = tabela_top10[['Media', 'Usuarios_Real', 'MoM (%)', 'YoY (%)']].copy()
     tabela.columns = ['Veículo', 'Audiência Total', 'Variação MoM (%)', 'Variação YoY (%)']
 
     return tabela.reset_index(drop=True)
@@ -345,18 +346,26 @@ def calcular_variacoes_veiculos(df_detalhado: pd.DataFrame, data_selecionada) ->
 # =========================================================
 
 @st.cache_data
-def calcular_share_grupos(df_categoria_completa: pd.DataFrame, nome_categoria: str) -> pd.DataFrame:
+def calcular_share_grupos(
+    df_categoria_completa: pd.DataFrame,
+    nome_categoria: str,
+    metrica: str = 'Visits_Total'          
+) -> pd.DataFrame:
     if df_categoria_completa.empty:
+        return pd.DataFrame()
+
+    if metrica not in df_categoria_completa.columns:
         return pd.DataFrame()
 
     cat_key = _normalizar_categoria(nome_categoria)
     top_x, next_y = GROUP_SIZES.get(cat_key, (5, 10))
 
     df = df_categoria_completa.copy()
+    df = df.dropna(subset=[metrica])
 
-    df['Mensal_Total'] = df.groupby('Date')['Total_Real'].transform('sum')
+    df['Mensal_Total'] = df.groupby('Date')[metrica].transform('sum')
     df = df[df['Mensal_Total'] > 0].copy()
-    df['share'] = df['Total_Real'] / df['Mensal_Total']
+    df['share'] = df[metrica] / df['Mensal_Total']
 
     media_rank = (
         df.groupby('Media')['share']
@@ -395,7 +404,7 @@ def contar_players_ativos(nome_categoria: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = df_completo.copy()
-    df = df[df['Total_Real'] > 0].copy()
+    df = df[df['Usuarios_Real'] > 0].copy()
 
     contagem = df.groupby('Date')['Media'].nunique().reset_index()
     contagem.columns = ['Date', 'Quantidade de Players']
@@ -417,9 +426,9 @@ def calcular_area_share_top_players(df_categoria_completa: pd.DataFrame, nome_ca
 
     df = df_categoria_completa.copy()
 
-    df['Mensal_Total'] = df.groupby('Date')['Total_Real'].transform('sum')
+    df['Mensal_Total'] = df.groupby('Date')['Visits_Real'].transform('sum')
     df = df[df['Mensal_Total'] > 0].copy()
-    df['share'] = df['Total_Real'] / df['Mensal_Total']
+    df['share'] = df['Visits_Real'] / df['Mensal_Total']
 
     top_players = (
         df.groupby('Media')['share']
@@ -446,8 +455,8 @@ def carregar_dados_dispersao(nome_categoria: str) -> pd.DataFrame:
 
     df = df.copy()
 
-    # Usuarios_Scatter: Total_Real já está em absoluto
-    df['Usuarios_Scatter'] = pd.to_numeric(df['Total_Real'], errors='coerce')
+    # Usuarios_Scatter: Usuarios_Real já está em absoluto
+    df['Usuarios_Scatter'] = pd.to_numeric(df['Usuarios_Real'], errors='coerce')
 
     # Visitas_Scatter: Visits_Real já está em absoluto, se existir
     df['Visitas_Scatter'] = pd.to_numeric(df['Visits_Real'], errors='coerce')
@@ -479,7 +488,7 @@ def carregar_serie_player(nome_categoria: str, media: str) -> pd.DataFrame:
     df_player = df[df['Media'] == media].copy()
     df_player = df_player.sort_values('Date').reset_index(drop=True)
 
-    return df_player[['Date', 'Media', 'Total_Real']]
+    return df_player[['Date', 'Media', 'Usuarios_Real']]
 
 
 @st.cache_data
@@ -495,7 +504,7 @@ def prever_audiencia_regressao_linear(
     Retorna um dataframe com:
     - Date
     - Media
-    - Total_Real
+    - Usuarios_Real
     - tipo ("Histórico", "Ajustado" ou "Previsto")
     """
     df_player = carregar_serie_player(nome_categoria, media)
@@ -509,19 +518,19 @@ def prever_audiencia_regressao_linear(
     df_player['t'] = np.arange(len(df_player))
 
     X = df_player[['t']]
-    y = df_player['Total_Real']
+    y = df_player['Usuarios_Real']
 
     modelo = LinearRegression()
     modelo.fit(X, y)
 
     # histórico real
-    df_hist = df_player[["Date", "Media", "Total_Real"]].copy()
+    df_hist = df_player[["Date", "Media", "Usuarios_Real"]].copy()
     df_hist["tipo"] = "Histórico"
 
     # histórico ajustado
     df_fit = df_player[["Date", "Media"]].copy()
-    df_fit["Total_Real"] = modelo.predict(X)
-    df_fit["Total_Real"] = np.maximum(df_fit["Total_Real"], 0)
+    df_fit["Usuarios_Real"] = modelo.predict(X)
+    df_fit["Usuarios_Real"] = np.maximum(df_fit["Usuarios_Real"], 0)
     df_fit["tipo"] = "Ajustado"
 
     # histórico ajustado não será mostrado como fitted, só usamos a previsão futura
@@ -543,7 +552,7 @@ def prever_audiencia_regressao_linear(
     df_prev = pd.DataFrame({
         'Date': datas_futuras,
         'Media': media,
-        'Total_Real': y_prev,
+        'Usuarios_Real': y_prev,
         'tipo': 'Previsto'
     })
 
@@ -563,7 +572,7 @@ def avaliar_modelo_regressao_linear(nome_categoria: str, media: str) -> pd.DataF
     df["t"] = np.arange(len(df))
 
     X = df[["t"]]
-    y = df["Total_Real"]
+    y = df["Usuarios_Real"]
 
     modelo = LinearRegression()
     modelo.fit(X, y)
@@ -596,7 +605,7 @@ def resumir_modelo_regressao_linear(nome_categoria: str, media: str) -> pd.DataF
     df["t"] = np.arange(len(df))
 
     X = df[["t"]]
-    y = df["Total_Real"]
+    y = df["Usuarios_Real"]
 
     modelo = LinearRegression()
     modelo.fit(X, y)
@@ -721,7 +730,7 @@ def prever_audiencia_regressao_exogenas(
     Retorna um DataFrame com:
     - Date
     - Media
-    - Total_Real
+    - Usuarios_Real
     - tipo: Histórico / Ajustado / Previsto
     """
     df_player = carregar_serie_player(nome_categoria, media)
@@ -742,19 +751,19 @@ def prever_audiencia_regressao_exogenas(
             df_hist[col] = 0
 
     X_hist = df_hist[["t"] + col_exog]
-    y_hist = df_hist["Total_Real"]
+    y_hist = df_hist["Usuarios_Real"]
 
     modelo = LinearRegression()
     modelo.fit(X_hist, y_hist)
 
     # série histórica real
-    df_hist_plot = df_hist[["Date", "Media", "Total_Real"]].copy()
+    df_hist_plot = df_hist[["Date", "Media", "Usuarios_Real"]].copy()
     df_hist_plot["tipo"] = "Histórico"
 
     # série ajustada no histórico
     df_fit_plot = df_hist[["Date", "Media"]].copy()
-    df_fit_plot["Total_Real"] = modelo.predict(X_hist)
-    df_fit_plot["Total_Real"] = np.maximum(df_fit_plot["Total_Real"], 0)
+    df_fit_plot["Usuarios_Real"] = modelo.predict(X_hist)
+    df_fit_plot["Usuarios_Real"] = np.maximum(df_fit_plot["Usuarios_Real"], 0)
     df_fit_plot["tipo"] = "Ajustado"
 
     # futuro
@@ -782,7 +791,7 @@ def prever_audiencia_regressao_exogenas(
     y_fut = np.maximum(y_fut, 0)
 
     df_prev_plot = df_fut[["Date", "Media"]].copy()
-    df_prev_plot["Total_Real"] = y_fut
+    df_prev_plot["Usuarios_Real"] = y_fut
     df_prev_plot["tipo"] = "Previsto"
 
     df_saida = pd.concat(
@@ -813,7 +822,7 @@ def resumir_modelo_regressao_exogenas(nome_categoria: str, media: str) -> pd.Dat
             df[col] = 0
 
     X = df[["t"] + col_exog]
-    y = df["Total_Real"]
+    y = df["Usuarios_Real"]
 
     modelo = LinearRegression()
     modelo.fit(X, y)
@@ -842,7 +851,7 @@ def avaliar_modelo_regressao_exogenas(nome_categoria: str, media: str) -> pd.Dat
             df[col] = 0
 
     X = df[["t"] + col_exog]
-    y = df["Total_Real"]
+    y = df["Usuarios_Real"]
 
     modelo = LinearRegression()
     modelo.fit(X, y)
