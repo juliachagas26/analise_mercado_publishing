@@ -349,7 +349,7 @@ def calcular_variacoes_veiculos(df_detalhado: pd.DataFrame, data_selecionada) ->
 def calcular_share_grupos(
     df_categoria_completa: pd.DataFrame,
     nome_categoria: str,
-    metrica: str = 'Visits_Total'          
+    metrica: str = 'Visits_Real'          
 ) -> pd.DataFrame:
     if df_categoria_completa.empty:
         return pd.DataFrame()
@@ -426,6 +426,7 @@ def calcular_area_share_top_players(df_categoria_completa: pd.DataFrame, nome_ca
 
     df = df_categoria_completa.copy()
 
+    df = df.dropna(subset=['Visits_Real'])
     df['Mensal_Total'] = df.groupby('Date')['Visits_Real'].transform('sum')
     df = df[df['Mensal_Total'] > 0].copy()
     df['share'] = df['Visits_Real'] / df['Mensal_Total']
