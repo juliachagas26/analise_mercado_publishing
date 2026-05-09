@@ -202,13 +202,13 @@ if secao == "Visão geral por categoria":
         fig = px.line(
             df_final,
             x="Date",
-            y="Total_Real",
+            y="Usuarios_Real",
             color="Categoria",
             color_discrete_map=MAPA_CORES_CATEGORIAS,
             markers=True,
             title="Evolução Mensal de Usuários Únicos por Categoria (Comscore)",
             labels={
-                "Total_Real": "Visitantes Únicos",
+                "Usuarios_Real": "Visitantes Únicos",
                 "Date": "Período",
                 "Categoria": "Nicho"
             },
@@ -375,11 +375,11 @@ elif secao in [
             fig_cat = px.line(
                 df_cat,
                 x="Date",
-                y="Total_Real",
+                y="Usuarios_Real",
                 color="Media",
                 markers=True,
                 title=f"Evolução Mensal: Principais Veículos de {categoria_selecionada.capitalize()}",
-                labels={"Total_Real": "Visitantes Únicos", "Date": "Período", "Media": "Veículo"},
+                labels={"Usuarios_Real": "Visitantes Únicos", "Date": "Período", "Media": "Veículo"},
                 template="plotly_white"
             )
 
@@ -764,13 +764,13 @@ elif secao in [
                 fig_pred = px.line(
                     df_pred,
                     x="Date",
-                    y="Total_Real",
+                    y="Usuarios_Real",
                     color="tipo",
                     markers=True,
                     title=f"Série histórica, ajuste e previsão - {media_selecionada}",
                     labels={
                         "Date": "Período",
-                        "Total_Real": "Usuários únicos",
+                        "Usuarios_Real": "Usuários únicos",
                         "tipo": "Série"
                     },
                     template="plotly_white",
