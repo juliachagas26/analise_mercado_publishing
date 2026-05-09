@@ -48,6 +48,7 @@ MONTH_MAP = {
 }
 
 
+
 # =========================================================
 # HELPERS
 # =========================================================
@@ -345,29 +346,26 @@ def calcular_variacoes_veiculos(df_detalhado: pd.DataFrame, data_selecionada) ->
 # =========================================================
 
 @st.cache_data
-def calcular_share_grupos(df_categoria_completa: pd.DataFrame, nome_categoria: str) -> pd.DataFrame:
+def calcular_share_grupos(
+    df_categoria_completa: pd.DataFrame,
+    nome_categoria: str,
+    metrica: str = 'Visits_Real'          
+) -> pd.DataFrame:
     if df_categoria_completa.empty:
+        return pd.DataFrame()
+
+    if metrica not in df_categoria_completa.columns:
         return pd.DataFrame()
 
     cat_key = _normalizar_categoria(nome_categoria)
     top_x, next_y = GROUP_SIZES.get(cat_key, (5, 10))
 
     df = df_categoria_completa.copy()
+    df = df.dropna(subset=[metrica])
 
-    df['Mensal_Total'] = df.groupby('Date')['Visits_Real'].transform('sum')
-    df = df[df['Mensal_Total'] >= 0].copy()
-    df['share'] = df['Visits_Real'] / df['Mensal_Total']
-
-    primeiro_mes = df['Date'].min()
-
-    players_elegiveis = set(
-        df.loc[
-            (df['Date'] == primeiro_mes) & (df['share'] > 0),
-            'Media'
-        ].unique()
-    )
-
-    df_rank = df[df['Media'].isin(players_elegiveis)]
+    df['Mensal_Total'] = df.groupby('Date')['Usuarios_Real'].transform('sum')
+    df = df[df['Mensal_Total'] > 0].copy()
+    df['share'] = df['Usuarios_Real'] / df['Mensal_Total']
 
     media_rank = (
         df.groupby('Media')['share']
