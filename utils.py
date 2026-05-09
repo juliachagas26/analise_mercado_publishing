@@ -363,9 +363,9 @@ def calcular_share_grupos(
     df = df_categoria_completa.copy()
     df = df.dropna(subset=[metrica])
 
-    df['Mensal_Total'] = df.groupby('Date')['Usuarios_Real'].transform('sum')
+    df['Mensal_Total'] = df.groupby('Date')['Visits_Real'].transform('sum')
     df = df[df['Mensal_Total'] > 0].copy()
-    df['share'] = df['Usuarios_Real'] / df['Mensal_Total']
+    df['share'] = df['Visits_Real'] / df['Mensal_Total']
 
     media_rank = (
         df.groupby('Media')['share']
